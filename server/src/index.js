@@ -15,6 +15,7 @@ import transactionRoutes from './routes/transactionRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import settingsRoutes from './routes/settingsRoutes.js';
 
 // Startup logging
 console.log('🚀 Finance Tracker Server Starting...');
@@ -84,6 +85,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/ai', aiLimiter, aiRoutes);
+app.use('/api/settings', settingsRoutes);
 // Admin routes (protected)
 app.use('/api/admin', adminRoutes);
 
@@ -104,8 +106,8 @@ const startServer = async () => {
       console.log(`
 ╔═══════════════════════════════════════════╗
 ║  🚀 Finance Tracker API Server            ║
-║  Port: ${PORT}                              ║
-║  Environment: ${process.env.NODE_ENV || 'development'}               ║
+║  Port: ${PORT}                               ║
+║  Environment: ${process.env.NODE_ENV || 'development'}                 ║
 ║  Status: Running                          ║
 ╚═══════════════════════════════════════════╝
       `);

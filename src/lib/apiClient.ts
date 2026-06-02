@@ -166,11 +166,14 @@ class ApiClient {
     });
   }
 
-  // ─── Admin: set API keys (requires auth & upgraded plan) ───
-  setApiKeys({ geminiKey, nvidiaKey, persist = false }: { geminiKey?: string; nvidiaKey?: string; persist?: boolean }) {
-    return this.request('/admin/keys', {
+  getSettingsApiKey(provider = 'gemini') {
+    return this.request(`/settings/api-key?provider=${encodeURIComponent(provider)}`);
+  }
+
+  saveSettingsApiKey(key: string, provider = 'gemini') {
+    return this.request('/settings/api-key', {
       method: 'POST',
-      body: JSON.stringify({ geminiKey, nvidiaKey, persist }),
+      body: JSON.stringify({ key, provider }),
     });
   }
 }

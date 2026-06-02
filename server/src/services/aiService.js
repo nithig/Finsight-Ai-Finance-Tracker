@@ -1,18 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// NVIDIA is the default provider. Gemini is only used when AI_PROVIDER=gemini.
-// If the provider is set to nvidia without a configured key, calls fail instead of silently falling back.
-
-// Helper function to get NVIDIA API key dynamically
-const getNvidiaApiKey = () => process.env.NVIDIA_API_KEY?.trim() || '';
-
 const REQUESTED_AI_PROVIDER = (process.env.AI_PROVIDER || 'nvidia').toLowerCase();
-const AI_PROVIDER = REQUESTED_AI_PROVIDER === 'gemini' ? 'gemini' : 'nvidia';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const DEFAULT_PROVIDER = REQUESTED_AI_PROVIDER === 'gemini' ? 'gemini' : 'nvidia';
 const NVIDIA_API_URL = 'https://integrate.api.nvidia.com/v1';
 
-// Model configurations
 const MODELS = {
   gemini: {
     categorization: 'gemini-2.5-flash-lite',
@@ -24,6 +15,33 @@ const MODELS = {
     insights: 'meta/llama-3.1-8b-instruct',
     extraction: 'meta/llama-3.1-70b-instruct', 
   },
+};
+
+const getNvidiaApiKey = () => process.env.NVIDIA_API_KEY?.trim() || '';
+const getLegacyGeminiKey = () => process.env.GEMINI_API_KEY?.trim() || '';
+
+const getGeminiClient = (geminiApiKey) => {
+  const key = geminiApiKey?.trim() || getLegacyGeminiKey();
+  if (!key) {
+    throw new Error('Please add your Gemini API key in Settings to use AI features.');
+  }
+  return new GoogleGenerativeAI(key);
+};
+
+const getActiveProvider = (geminiApiKey) => {
+  if (geminiApiKey?.trim()) {
+    return 'gemini';
+  }
+  return DEFAULT_PROVIDER;
+};
+
+const maskApiKey = (key = '') => {
+  const trimmed = String(key).trim();
+  if (!trimmed) return '';
+  if (trimmed.length <= 8) {
+    return `${'*'.repeat(Math.max(0, trimmed.length - 4))}${trimmed.slice(-4)}`;
+  }
+  return `${trimmed.slice(0, 4)}${'*'.repeat(Math.max(0, trimmed.length - 8))}${trimmed.slice(-4)}`;
 };
 
 // ──── NVIDIA API Helper ──────────────────────────────────
@@ -82,39 +100,39 @@ const createFinancialExtractionPrompt = (fileContent, fileType) => `You are an e
 export const aiService = {
   
   // ──── Get AI Provider Info ───────────────────────────────
-  getProviderInfo() {
-    const nvidiaApiKey = getNvidiaApiKey();
-    const isConfigured = AI_PROVIDER === 'nvidia' ? !!nvidiaApiKey : !!process.env.GEMINI_API_KEY;
-    
+  getProviderInfo(geminiApiKey) {
+    const activeProvider = getActiveProvider(geminiApiKey);
+    const hasGeminiKey = Boolean(geminiApiKey?.trim() || getLegacyGeminiKey());
+    const hasNvidiaKey = Boolean(getNvidiaApiKey());
+
     return {
       requestedProvider: REQUESTED_AI_PROVIDER,
-      provider: AI_PROVIDER,
-      models: MODELS[AI_PROVIDER] || MODELS.gemini,
-      available: isConfigured,
-      configured: isConfigured,
+      provider: activeProvider,
+      models: MODELS[activeProvider] || MODELS.gemini,
+      available: activeProvider === 'gemini' ? hasGeminiKey : hasNvidiaKey,
+      configured: activeProvider === 'gemini' ? hasGeminiKey : hasNvidiaKey,
+      maskedKey: activeProvider === 'gemini' ? maskApiKey(geminiApiKey || getLegacyGeminiKey()) : '',
     };
   },
 
   // ──── Categorize Transaction ─────────────────────────────
-  async categorizeTransaction(description) {
+  async categorizeTransaction(description, options = {}) {
     try {
       const prompt = createCategorizationPrompt(description);
+      const provider = getActiveProvider(options.geminiApiKey);
       let text;
 
-      if (AI_PROVIDER === 'nvidia') {
-        const nvidiaApiKey = getNvidiaApiKey();
-        if (!nvidiaApiKey) {
-          throw new Error('NVIDIA API key not configured');
-        }
+      if (provider === 'nvidia') {
         text = await callNvidiaAPI(prompt, MODELS.nvidia.categorization);
       } else {
-        const model = genAI.getGenerativeModel({ model: MODELS.gemini.categorization });
+        const client = getGeminiClient(options.geminiApiKey);
+        const model = client.getGenerativeModel({ model: MODELS.gemini.categorization });
         const result = await model.generateContent(prompt);
         text = (await result.response).text().trim();
       }
 
       const validCategories = ['Food', 'Transport', 'Bills', 'Shopping', 'Salary', 'Entertainment', 'Others'];
-      const category = validCategories.find(cat => text.includes(cat)) || 'Others';
+      const category = validCategories.find((cat) => text.includes(cat)) || 'Others';
 
       return { success: true, category };
     } catch (error) {
@@ -124,7 +142,7 @@ export const aiService = {
   },
 
   // ──── Generate Insights ──────────────────────────────────
-  async generateInsights(transactions) {
+  async generateInsights(transactions, options = {}) {
     try {
       if (transactions.length === 0) {
         return {
@@ -139,16 +157,14 @@ export const aiService = {
       }
 
       const prompt = createInsightsPrompt(transactions);
+      const provider = getActiveProvider(options.geminiApiKey);
       let text;
 
-      if (AI_PROVIDER === 'nvidia') {
-        // FIXED: Using function call instead of non-existent global variable
-        if (!getNvidiaApiKey()) {
-          throw new Error('NVIDIA API key not configured');
-        }
+      if (provider === 'nvidia') {
         text = await callNvidiaAPI(prompt, MODELS.nvidia.insights);
       } else {
-        const model = genAI.getGenerativeModel({ model: MODELS.gemini.insights });
+        const client = getGeminiClient(options.geminiApiKey);
+        const model = client.getGenerativeModel({ model: MODELS.gemini.insights });
         const result = await model.generateContent(prompt);
         text = (await result.response).text().trim();
       }
@@ -179,7 +195,7 @@ export const aiService = {
   },
 
   // ──── Extract Financial Data from Documents ──────────────
-  async extractFinancialData(fileContent, fileType = 'PDF') {
+  async extractFinancialData(fileContent, fileType = 'PDF', options = {}) {
     try {
       if (!fileContent) {
         return { success: false, error: 'No content to extract', data: [] };
@@ -187,20 +203,18 @@ export const aiService = {
 
       const truncatedContent = fileContent.substring(0, 8000);
       const prompt = createFinancialExtractionPrompt(truncatedContent, fileType);
+      const provider = getActiveProvider(options.geminiApiKey);
       let text;
 
-      if (AI_PROVIDER === 'nvidia') {
-        // FIXED: Using function call instead of non-existent global variable
-        if (!getNvidiaApiKey()) {
-          throw new Error('NVIDIA API key not configured');
-        }
+      if (provider === 'nvidia') {
         text = await callNvidiaAPI(
           prompt,
           MODELS.nvidia.extraction,
           'You are an expert financial analyst specializing in document parsing. Extract ALL financial transactions accurately.'
         );
       } else {
-        const model = genAI.getGenerativeModel({ model: MODELS.gemini.extraction });
+        const client = getGeminiClient(options.geminiApiKey);
+        const model = client.getGenerativeModel({ model: MODELS.gemini.extraction });
         const result = await model.generateContent(prompt);
         text = (await result.response).text().trim();
       }
@@ -219,27 +233,25 @@ export const aiService = {
   },
 
   // ──── Analyze Financial Patterns ─────────────────────────
-  async analyzeFinancialPatterns(transactions) {
+  async analyzeFinancialPatterns(transactions, options = {}) {
     try {
       if (transactions.length < 3) {
         return { success: false, error: 'Need at least 3 transactions for meaningful analysis' };
       }
 
       const transactionText = transactions
-        .map(t => `${t.date}: ${t.description} - $${t.amount} (${t.category})`)
+        .map((t) => `${t.date}: ${t.description} - $${t.amount} (${t.category})`)
         .join('\n');
 
       const prompt = `Analyze these financial transactions and provide:\n1. Spending patterns and trends\n2. Anomalies\n3. Budget recommendations\n4. Risk factors\n\nTransactions:\n${transactionText}\n\nRespond with a JSON object containing: patterns, anomalies, budgetRecs, healthScore (0-100), riskFactors`;
+      const provider = getActiveProvider(options.geminiApiKey);
       let text;
 
-      if (AI_PROVIDER === 'nvidia') {
-        // FIXED: Using function call instead of non-existent global variable
-        if (!getNvidiaApiKey()) {
-          throw new Error('NVIDIA API key not configured');
-        }
+      if (provider === 'nvidia') {
         text = await callNvidiaAPI(prompt, MODELS.nvidia.extraction, 'You are a financial advisor analyzing spending patterns.');
       } else {
-        const model = genAI.getGenerativeModel({ model: MODELS.gemini.insights });
+        const client = getGeminiClient(options.geminiApiKey);
+        const model = client.getGenerativeModel({ model: MODELS.gemini.insights });
         const result = await model.generateContent(prompt);
         text = (await result.response).text().trim();
       }

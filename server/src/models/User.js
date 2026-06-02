@@ -34,6 +34,26 @@ const userSchema = new mongoose.Schema(
       enum: ['free', 'pro', 'premium'],
       default: 'free',
     },
+    geminiApiKey: {
+      type: String,
+      trim: true,
+      default: '',
+      select: false,
+    },
+    apiKeys: {
+      gemini: {
+        type: String,
+        trim: true,
+        default: '',
+        select: false,
+      },
+      nvidia: {
+        type: String,
+        trim: true,
+        default: '',
+        select: false,
+      },
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,

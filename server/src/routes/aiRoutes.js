@@ -1,6 +1,7 @@
 import express from 'express';
 import { verifyToken } from '../middleware/auth.js';
 import Transaction from '../models/Transaction.js';
+import User from '../models/User.js';
 import { aiService } from '../services/aiService.js';
 
 const router = express.Router();
@@ -22,8 +23,10 @@ router.get('/insights', async (req, res) => {
     }
 
     const transactions = await Transaction.find(query).sort({ date: -1 }).limit(100);
+    const user = await User.findById(req.userId).lean();
+    const geminiKey = user?.geminiApiKey?.trim() || user?.apiKeys?.gemini?.trim() || '';
 
-    const insightsResult = await aiService.generateInsights(transactions);
+    const insightsResult = await aiService.generateInsights(transactions, { geminiApiKey: geminiKey });
 
     res.json({
       success: insightsResult.success,
@@ -94,11 +97,14 @@ router.post('/categorize', async (req, res) => {
       return res.status(400).json({ message: 'Description is required' });
     }
 
-    const result = await aiService.categorizeTransaction(description);
+    const user = await User.findById(req.userId).lean();
+    const geminiKey = user?.geminiApiKey?.trim() || user?.apiKeys?.gemini?.trim() || '';
+    const result = await aiService.categorizeTransaction(description, { geminiApiKey: geminiKey });
 
     res.json({
       success: result.success,
       category: result.category,
+      error: result.error,
     });
   } catch (error) {
     res.status(500).json({

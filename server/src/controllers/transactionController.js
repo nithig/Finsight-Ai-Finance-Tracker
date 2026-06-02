@@ -1,4 +1,5 @@
 import Transaction from '../models/Transaction.js';
+import User from '../models/User.js';
 import { aiService } from '../services/aiService.js';
 
 export const transactionController = {
@@ -70,10 +71,14 @@ export const transactionController = {
       }
 
       let finalCategory = category || 'Others';
+      let geminiKey = '';
 
-      // Use AI to categorize if not provided
+      // Load the user's stored Gemini key for AI categorization
       if (!category) {
-        const aiResult = await aiService.categorizeTransaction(description);
+        const user = await User.findById(req.userId).lean();
+        geminiKey = user?.geminiApiKey?.trim() || user?.apiKeys?.gemini?.trim() || '';
+
+        const aiResult = await aiService.categorizeTransaction(description, { geminiApiKey: geminiKey });
         if (aiResult.success) {
           finalCategory = aiResult.category;
         }
