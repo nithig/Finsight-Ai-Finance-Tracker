@@ -72,13 +72,15 @@ export const transactionController = {
 
       let finalCategory = category || 'Others';
       let geminiKey = '';
+      let nvidiaKey = '';
 
-      // Load the user's stored Gemini key for AI categorization
+      // Load the user's stored API keys for AI categorization
       if (!category) {
         const user = await User.findById(req.userId).lean();
         geminiKey = user?.geminiApiKey?.trim() || user?.apiKeys?.gemini?.trim() || '';
+        nvidiaKey = user?.nvidiaApiKey?.trim() || user?.apiKeys?.nvidia?.trim() || '';
 
-        const aiResult = await aiService.categorizeTransaction(description, { geminiApiKey: geminiKey });
+        const aiResult = await aiService.categorizeTransaction(description, { geminiApiKey: geminiKey, nvidiaApiKey: nvidiaKey });
         if (aiResult.success) {
           finalCategory = aiResult.category;
         }

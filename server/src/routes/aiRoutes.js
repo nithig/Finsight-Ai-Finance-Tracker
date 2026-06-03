@@ -25,8 +25,9 @@ router.get('/insights', async (req, res) => {
     const transactions = await Transaction.find(query).sort({ date: -1 }).limit(100);
     const user = await User.findById(req.userId).lean();
     const geminiKey = user?.geminiApiKey?.trim() || user?.apiKeys?.gemini?.trim() || '';
+    const nvidiaKey = user?.nvidiaApiKey?.trim() || user?.apiKeys?.nvidia?.trim() || '';
 
-    const insightsResult = await aiService.generateInsights(transactions, { geminiApiKey: geminiKey });
+    const insightsResult = await aiService.generateInsights(transactions, { geminiApiKey: geminiKey, nvidiaApiKey: nvidiaKey });
 
     res.json({
       success: insightsResult.success,
@@ -99,7 +100,8 @@ router.post('/categorize', async (req, res) => {
 
     const user = await User.findById(req.userId).lean();
     const geminiKey = user?.geminiApiKey?.trim() || user?.apiKeys?.gemini?.trim() || '';
-    const result = await aiService.categorizeTransaction(description, { geminiApiKey: geminiKey });
+    const nvidiaKey = user?.nvidiaApiKey?.trim() || user?.apiKeys?.nvidia?.trim() || '';
+    const result = await aiService.categorizeTransaction(description, { geminiApiKey: geminiKey, nvidiaApiKey: nvidiaKey });
 
     res.json({
       success: result.success,

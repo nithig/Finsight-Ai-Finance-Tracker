@@ -13,8 +13,8 @@ export const settingsController = {
   async getApiKey(req, res) {
     try {
       const provider = String(req.query.provider || 'gemini').toLowerCase();
-      if (provider !== 'gemini') {
-        return res.status(400).json({ message: 'Unsupported provider' });
+      if (!['gemini', 'nvidia'].includes(provider)) {
+        return res.status(400).json({ message: 'Unsupported provider. Use "gemini" or "nvidia".' });
       }
 
       const user = await User.findById(req.userId).lean();
@@ -22,9 +22,15 @@ export const settingsController = {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      const storedKey = user.geminiApiKey?.trim() || user.apiKeys?.gemini?.trim() || '';
+      let storedKey = '';
+      if (provider === 'gemini') {
+        storedKey = user.geminiApiKey?.trim() || user.apiKeys?.gemini?.trim() || '';
+      } else if (provider === 'nvidia') {
+        storedKey = user.nvidiaApiKey?.trim() || user.apiKeys?.nvidia?.trim() || '';
+      }
+
       return res.json({
-        provider: 'gemini',
+        provider,
         available: Boolean(storedKey),
         key: storedKey ? maskApiKey(storedKey) : '',
       });
@@ -37,13 +43,13 @@ export const settingsController = {
   async saveApiKey(req, res) {
     try {
       const provider = String(req.body.provider || 'gemini').toLowerCase();
-      if (provider !== 'gemini') {
-        return res.status(400).json({ message: 'Unsupported provider' });
+      if (!['gemini', 'nvidia'].includes(provider)) {
+        return res.status(400).json({ message: 'Unsupported provider. Use "gemini" or "nvidia".' });
       }
 
       const key = String(req.body.key || '').trim();
       if (!key) {
-        return res.status(400).json({ message: 'Gemini API key is required' });
+        return res.status(400).json({ message: `${provider.charAt(0).toUpperCase() + provider.slice(1)} API key is required` });
       }
 
       const user = await User.findById(req.userId);
@@ -51,14 +57,21 @@ export const settingsController = {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      user.geminiApiKey = key;
       user.apiKeys = user.apiKeys || {};
-      user.apiKeys.gemini = key;
+
+      if (provider === 'gemini') {
+        user.geminiApiKey = key;
+        user.apiKeys.gemini = key;
+      } else if (provider === 'nvidia') {
+        user.nvidiaApiKey = key;
+        user.apiKeys.nvidia = key;
+      }
+
       await user.save();
 
       return res.json({
-        message: 'Gemini API key saved successfully',
-        provider: 'gemini',
+        message: `${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved successfully`,
+        provider,
         key: maskApiKey(key),
       });
     } catch (error) {

@@ -1,4 +1,5 @@
 import Transaction from '../models/Transaction.js';
+import User from '../models/User.js';
 import { parserService } from '../services/parserService.js';
 import { aiService } from '../services/aiService.js';
 
@@ -22,13 +23,18 @@ export const uploadController = {
         });
       }
 
-      const parseResult = await parserService.parseFileWithFallback(req.file.buffer, req.file.originalname);
+      const parseResult = await parserService.parseFileWithFallback(req.file.buffer, req.file.originalname, { geminiApiKey: geminiKey, nvidiaApiKey: nvidiaKey });
 
       if (!parseResult.success) {
         return res.status(400).json({ message: parseResult.error });
       }
 
       const { data: transactions } = parseResult;
+
+      // Load user's API keys for AI processing
+      const user = await User.findById(req.userId).lean();
+      const geminiKey = user?.geminiApiKey?.trim() || user?.apiKeys?.gemini?.trim() || '';
+      const nvidiaKey = user?.nvidiaApiKey?.trim() || user?.apiKeys?.nvidia?.trim() || '';
 
       console.log(`📊 Parsed ${transactions.length} transactions from ${parseResult.format}`);
 
@@ -51,8 +57,8 @@ export const uploadController = {
           continue; 
         }
 
-        // Send a single request and await its completion before moving to the next item
-        const aiResult = await aiService.categorizeTransaction(txn.description);
+        // Send a single request with user's API keys and await its completion before moving to the next item
+        const aiResult = await aiService.categorizeTransaction(txn.description, { geminiApiKey: geminiKey, nvidiaApiKey: nvidiaKey });
         
         if (!aiResult.success) {
           console.warn(`⚠️  Failed to categorize: ${txn.description}`, aiResult.error);
@@ -102,7 +108,7 @@ export const uploadController = {
       res.status(500).json({ 
         message: 'Upload failed', 
         error: error.message,
-        provider: aiService.getProviderInfo().provider,
+        provider: aiService.getProviderInfo(geminiKey, nvidiaKey).provider,
       });
     }
   },

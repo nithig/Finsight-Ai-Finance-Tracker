@@ -3,10 +3,13 @@ import { useNavigate } from '../lib/router';
 import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../lib/apiClient';
 
+type Provider = 'gemini' | 'nvidia';
+
 export function SettingsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [geminiKey, setGeminiKey] = useState('');
+  const [activeProvider, setActiveProvider] = useState<Provider>('nvidia');
+  const [apiKey, setApiKey] = useState('');
   const [maskedKey, setMaskedKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -15,15 +18,15 @@ export function SettingsPage() {
   useEffect(() => {
     const loadKey = async () => {
       try {
-        const response = await apiClient.getSettingsApiKey('gemini');
+        const response = await apiClient.getSettingsApiKey(activeProvider);
         setMaskedKey(response.key || '');
       } catch (error) {
-        console.warn('Unable to load Gemini key', error);
+        console.warn(`Unable to load ${activeProvider} key`, error);
       }
     };
 
     loadKey();
-  }, []);
+  }, [activeProvider]);
 
   if (!user) {
     return (
@@ -40,41 +43,95 @@ export function SettingsPage() {
     setLoading(true);
 
     try {
-      const response = await apiClient.saveSettingsApiKey(geminiKey, 'gemini');
+      const response = await apiClient.saveSettingsApiKey(apiKey, activeProvider);
       setMaskedKey(response.key || '');
-      setGeminiKey('');
+      setApiKey('');
       setShowKey(false);
-      setMessage(response.message || 'Your Gemini API key was saved successfully.');
+      setMessage(response.message || `Your ${activeProvider} API key was saved successfully.`);
     } catch (err: any) {
-      setMessage(err.message || 'Failed to save your Gemini API key.');
+      setMessage(err.message || `Failed to save your ${activeProvider} API key.`);
     } finally {
       setLoading(false);
     }
   };
+
+  const providerInfo = {
+    nvidia: {
+      title: 'NVIDIA API Key',
+      description: 'Use NVIDIA\'s hosted inference for fast, free AI categorization.',
+      learnMore: 'https://developer.nvidia.com/docs/nvidia-nim-overview',
+      docs: 'NVIDIA API Documentation',
+      steps: [
+        'Go to NVIDIA NIM (developer.nvidia.com)',
+        'Create a free API key',
+        'Paste it here and save.',
+      ],
+    },
+    gemini: {
+      title: 'Google Gemini API Key',
+      description: 'Use Google\'s Gemini model for AI-powered insights.',
+      learnMore: 'https://studio.google.ai/',
+      docs: 'Google AI Studio',
+      steps: [
+        'Go to Google AI Studio.',
+        'Generate a Gemini API key for your project.',
+        'Paste it here and save.',
+      ],
+    },
+  };
+
+  const info = providerInfo[activeProvider];
 
   return (
     <div className="p-6 max-w-3xl space-y-8 page-enter">
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="text-2xl font-semibold text-gray-900">AI Configuration</h2>
         <p className="mt-3 text-sm text-gray-600 leading-relaxed">
-          Finsight uses a bring-your-own-key model to keep AI features free to use. Add your Gemini API key to enable AI categorization and spending insights.
+          Finsight uses a bring-your-own-key model to keep AI features free to use. Add your API key to enable AI categorization and spending insights.
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
         <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900">Gemini API Key</h3>
-          <p className="mt-2 text-sm text-gray-500">Your key is stored securely on the server and never revealed in full in the app.</p>
+          {/* Provider Selector */}
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Select AI Provider</h3>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setActiveProvider('nvidia')}
+                className={`flex-1 px-4 py-3 rounded-2xl text-sm font-semibold transition ${
+                  activeProvider === 'nvidia'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                NVIDIA (Recommended)
+              </button>
+              <button
+                onClick={() => setActiveProvider('gemini')}
+                className={`flex-1 px-4 py-3 rounded-2xl text-sm font-semibold transition ${
+                  activeProvider === 'gemini'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Gemini
+              </button>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-semibold text-gray-900">{info.title}</h3>
+          <p className="mt-2 text-sm text-gray-500">{info.description}</p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-5">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Gemini API key</label>
+              <label className="text-sm font-medium text-gray-700">API Key</label>
               <div className="relative">
                 <input
                   type={showKey ? 'text' : 'password'}
-                  value={geminiKey}
-                  onChange={(event) => setGeminiKey(event.target.value)}
-                  placeholder={maskedKey ? `Saved key: ${maskedKey}` : 'Enter your Gemini API key'}
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder={maskedKey ? `Saved key: ${maskedKey}` : `Enter your ${activeProvider.toUpperCase()} API key`}
                   className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                 />
                 <button
@@ -97,7 +154,7 @@ export function SettingsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setGeminiKey('')}
+                onClick={() => setApiKey('')}
                 className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Clear
@@ -108,19 +165,19 @@ export function SettingsPage() {
           </form>
 
           <div className="mt-6 rounded-2xl border border-gray-100 bg-emerald-50 p-4 text-sm text-gray-700">
-            <p className="font-medium text-gray-900">How to get a free Gemini API key</p>
+            <p className="font-medium text-gray-900">How to get a {activeProvider} API key</p>
             <ol className="mt-3 space-y-2 list-decimal pl-5 text-gray-700">
-              <li>Go to Google AI Studio.</li>
-              <li>Generate a Gemini API key for your project.</li>
-              <li>Paste it here and save.</li>
+              {info.steps.map((step, idx) => (
+                <li key={idx}>{step}</li>
+              ))}
             </ol>
             <a
-              href="https://studio.google.ai/"
+              href={info.learnMore}
               target="_blank"
               rel="noreferrer"
               className="mt-4 inline-flex items-center rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50"
             >
-              Open Google AI Studio
+              {info.docs}
             </a>
           </div>
         </section>
@@ -128,9 +185,10 @@ export function SettingsPage() {
         <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-gray-900">Key status</h3>
           <div className="mt-4 space-y-3 text-sm text-gray-700">
-            <p><strong>Current Gemini key:</strong> {maskedKey ? maskedKey : 'No key configured'}</p>
-            <p>AI features will use your Gemini API key first. If no key is configured, the app will prompt you to add one.</p>
-            <p className="text-xs text-gray-500">Your key is masked for safety and never returned to the client in full.</p>
+            <p><strong>NVIDIA key:</strong> {maskedKey && activeProvider === 'nvidia' ? maskedKey : 'Not configured'}</p>
+            <p><strong>Gemini key:</strong> {maskedKey && activeProvider === 'gemini' ? maskedKey : 'Not configured'}</p>
+            <p>AI features will use your configured API key. Both providers can be set up.</p>
+            <p className="text-xs text-gray-500">Your keys are masked for safety and never returned to the client in full.</p>
           </div>
           <button
             type="button"

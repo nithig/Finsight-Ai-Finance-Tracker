@@ -202,7 +202,7 @@ export const parserService = {
 
   // ─── AI-Enhanced PDF Parser (uses Llama 3.1 70B) ─────────
   // Falls back to AI extraction when standard parsing fails
-  async parseWithAI(fileBuffer, originalname) {
+  async parseWithAI(fileBuffer, originalname, options = {}) {
     try {
       const ext = (originalname || '').split('.').pop().toLowerCase();
       
@@ -219,7 +219,7 @@ export const parserService = {
       }
 
       // Use AI service to extract structured data (uses Llama 3.1 70B)
-      const result = await aiService.extractFinancialData(text, 'PDF');
+      const result = await aiService.extractFinancialData(text, 'PDF', options);
 
       if (!result.success || !result.data || result.data.length === 0) {
         return {
@@ -238,7 +238,7 @@ export const parserService = {
             type: String(item.amount || 0).includes('-') ? 'debit' : 'credit',
             category: this._normalizeCategory(item.category || 'Others'),
             merchant: '',
-            notes: `Extracted via AI (${aiService.getProviderInfo().provider})`,
+            notes: `Extracted via AI (${aiService.getProviderInfo(options.geminiApiKey, options.nvidiaApiKey).provider})`,
           };
         } catch (e) {
           return null;
@@ -254,7 +254,7 @@ export const parserService = {
         data: transactions,
         total: transactions.length,
         format: 'PDF (AI-Enhanced)',
-        provider: aiService.getProviderInfo().provider,
+        provider: aiService.getProviderInfo(options.geminiApiKey, options.nvidiaApiKey).provider,
       };
     } catch (error) {
       console.error('AI-Enhanced PDF parsing failed:', error);
@@ -283,7 +283,7 @@ export const parserService = {
   },
 
   // ─── Fallback: Try AI when standard parsing fails ────────
-  async parseFileWithFallback(fileBuffer, originalname) {
+  async parseFileWithFallback(fileBuffer, originalname, options = {}) {
     const ext = (originalname || '').split('.').pop().toLowerCase();
 
     // Try standard parsing first
@@ -292,7 +292,7 @@ export const parserService = {
     // If standard parsing fails and it's a PDF, try AI extraction
     if (!result.success && ext === 'pdf') {
       console.log('Standard PDF parsing failed, attempting AI extraction...');
-      return await this.parseWithAI(fileBuffer, originalname);
+      return await this.parseWithAI(fileBuffer, originalname, options);
     }
 
     return result;
