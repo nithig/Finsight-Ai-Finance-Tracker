@@ -121,8 +121,32 @@ export const parserService = {
     const transactions = records.map((record, index) => {
       try {
         // Support flexible column names (lowercase + capitalized)
-        const description = this._findField(record, ['description', 'Description', 'name', 'Name', 'merchant', 'Merchant', 'memo', 'Memo', 'particular', 'Particular', 'narration', 'Narration'])
-          || 'Transaction';
+        const description =
+  this._findField(record, [
+    'description',
+    'Description',
+    'name',
+    'Name',
+    'merchant',
+    'Merchant',
+    'memo',
+    'Memo',
+    'particular',
+    'Particular',
+    'narration',
+    'Narration',
+    'details',
+    'Details',
+    'remarks',
+    'Remarks',
+    'transaction details',
+    'Transaction Details',
+    'message',
+    'Message',
+    'reference',
+    'Reference'
+  ]) ||
+  `${format || 'Bank'} Transaction`;
 
         const amountRaw = this._findField(record, ['amount', 'Amount', 'value', 'Value', 'total', 'Total', 'debit', 'Debit', 'credit', 'Credit']);
         const amount = parseFloat(String(amountRaw).replace(/[^0-9.\-]/g, '') || '0');
@@ -134,9 +158,16 @@ export const parserService = {
           description: String(description).substring(0, 200),
           amount: Math.abs(amount),
           type: this.inferType(
-            this._findField(record, ['type', 'Type', 'transaction_type', 'TransactionType']),
-            amountRaw
-          ),
+  this._findField(record, [
+    'type',
+    'Type',
+    'transaction_type',
+    'TransactionType'
+  ]),
+  amountRaw,
+  record,
+  description
+),
           category: this._findField(record, ['category', 'Category']) || 'Others',
           merchant: String(this._findField(record, ['merchant', 'Merchant', 'store', 'Store']) || '').substring(0, 100),
           notes: String(this._findField(record, ['notes', 'Notes', 'memo', 'Memo', 'remark', 'Remark']) || '').substring(0, 500),
@@ -357,24 +388,76 @@ export const parserService = {
     return new Date();
   },
 
-  inferType(typeString, amount) {
-    if (typeString) {
-      const type = String(typeString).toLowerCase().trim();
-      if (type.includes('credit') || type.includes('income') || type.includes('deposit') || type.includes('salary')) {
-        return 'credit';
-      }
-      if (type.includes('debit') || type.includes('expense') || type.includes('withdrawal') || type.includes('payment')) {
-        return 'debit';
-      }
+  inferType(typeString, amount, record = {}, description = '') {
+  // Explicit type field
+  if (typeString) {
+    const type = String(typeString).toLowerCase().trim();
+
+    if (
+      type.includes('credit') ||
+      type.includes('income') ||
+      type.includes('deposit') ||
+      type.includes('salary') ||
+      type.includes('cr')
+    ) {
+      return 'credit';
     }
 
-    if (amount) {
-      const num = parseFloat(String(amount).replace(/[^0-9.\-]/g, ''));
-      if (!isNaN(num)) {
-        return num > 0 ? 'credit' : 'debit';
-      }
+    if (
+      type.includes('debit') ||
+      type.includes('expense') ||
+      type.includes('withdrawal') ||
+      type.includes('payment') ||
+      type.includes('dr')
+    ) {
+      return 'debit';
     }
+  }
 
+  // Detect using Debit / Credit columns
+  const debit =
+    record.Debit ||
+    record.debit;
+
+  const credit =
+    record.Credit ||
+    record.credit;
+
+  if (
+    debit !== undefined &&
+    String(debit).trim() !== ''
+  ) {
     return 'debit';
-  },
+  }
+
+  if (
+    credit !== undefined &&
+    String(credit).trim() !== ''
+  ) {
+    return 'credit';
+  }
+
+  // Detect from narration/description
+  const text = String(description).toUpperCase();
+
+  if (
+    text.includes('/DR/') ||
+    text.includes('WDL') ||
+    text.includes('WITHDRAW') ||
+    text.includes('PAYMENT')
+  ) {
+    return 'debit';
+  }
+
+  if (
+    text.includes('/CR/') ||
+    text.includes('DEP') ||
+    text.includes('SALARY')
+  ) {
+    return 'credit';
+  }
+
+  return 'debit';
+}
+
 };

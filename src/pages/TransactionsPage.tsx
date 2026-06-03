@@ -127,6 +127,7 @@ export function TransactionsPage() {
           </div>
         )}
 
+        <span className="text-xs text-red-500 uppercase tracking-wide font-medium">Note: Use your Own API key for transactions parsing, AI Insight and category extraction</span>
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3">
           <button
@@ -343,9 +344,9 @@ export function TransactionsPage() {
                   <div className="flex items-center gap-3 ml-2">
                     <span className={cn(
                       'text-sm font-semibold whitespace-nowrap tabular-nums',
-                      t.type === 'credit' ? 'text-emerald-600' : 'text-gray-900'
+                      t.type === 'credit' ? 'text-emerald-600' : 'text-red-500'
                     )}>
-                      {t.type === 'credit' ? '+' : '-'}{formatCurrency(Number(t.amount))}
+                      {t.type === 'credit' ? '+' : '-'}{formatCurrency(Number("" + t.amount))}
                     </span>
                     <button
                       onClick={() => handleDelete(t._id)}
