@@ -15,17 +15,37 @@ export function SettingsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [nvidiaKey, setNvidiaKey] = useState('');
+  const [geminiKeyMasked, setGeminiKeyMasked] = useState('');
+
+  const loadBothKeys = async () => {
+    try {
+      const [nvidiaResp, geminiResp] = await Promise.all([
+        apiClient.getSettingsApiKey('nvidia').catch(() => ({ key: '' })),
+        apiClient.getSettingsApiKey('gemini').catch(() => ({ key: '' }))
+      ]);
+      
+      setNvidiaKey(nvidiaResp.key || '');
+      setGeminiKeyMasked(geminiResp.key || '');
+      setMaskedKey(activeProvider === 'nvidia' ? nvidiaResp.key || '' : geminiResp.key || '');
+    } catch (error) {
+      console.warn('Unable to load keys', error);
+    }
+  };
+
+  // Load keys on mount and when provider changes
   useEffect(() => {
-    const loadKey = async () => {
-      try {
-        const response = await apiClient.getSettingsApiKey(activeProvider);
-        setMaskedKey(response.key || '');
-      } catch (error) {
-        console.warn(`Unable to load ${activeProvider} key`, error);
-      }
+    loadBothKeys();
+  }, [activeProvider]);
+
+  // Reload keys when the window gains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      loadBothKeys();
     };
 
-    loadKey();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [activeProvider]);
 
   if (!user) {
@@ -48,6 +68,9 @@ export function SettingsPage() {
       setApiKey('');
       setShowKey(false);
       setMessage(response.message || `Your ${activeProvider} API key was saved successfully.`);
+      
+      // Reload both keys after successful save
+      await loadBothKeys();
     } catch (err: any) {
       setMessage(err.message || `Failed to save your ${activeProvider} API key.`);
     } finally {
@@ -185,8 +208,8 @@ export function SettingsPage() {
         <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-gray-900">Key status</h3>
           <div className="mt-4 space-y-3 text-sm text-gray-700">
-            <p><strong>NVIDIA key:</strong> {maskedKey && activeProvider === 'nvidia' ? maskedKey : 'Not configured'}</p>
-            <p><strong>Gemini key:</strong> {maskedKey && activeProvider === 'gemini' ? maskedKey : 'Not configured'}</p>
+            <p><strong>NVIDIA key:</strong> {nvidiaKey ? nvidiaKey : 'Not configured'}</p>
+            <p><strong>Gemini key:</strong> {geminiKeyMasked ? geminiKeyMasked : 'Not configured'}</p>
             <p>AI features will use your configured API key. Both providers can be set up.</p>
             <p className="text-xs text-gray-500">Your keys are masked for safety and never returned to the client in full.</p>
           </div>

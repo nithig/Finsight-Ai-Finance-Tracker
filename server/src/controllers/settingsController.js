@@ -17,7 +17,9 @@ export const settingsController = {
         return res.status(400).json({ message: 'Unsupported provider. Use "gemini" or "nvidia".' });
       }
 
-      const user = await User.findById(req.userId).lean();
+      const user = await User.findById(req.userId)
+  .select('+geminiApiKey +apiKeys')
+  .lean();
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
@@ -30,10 +32,11 @@ export const settingsController = {
       }
 
       return res.json({
-        provider,
-        available: Boolean(storedKey),
-        key: storedKey ? maskApiKey(storedKey) : '',
-      });
+  provider,
+  configured: Boolean(storedKey),
+  available: Boolean(storedKey),
+  key: storedKey ? maskApiKey(storedKey) : '',
+});
     } catch (error) {
       console.error('Get API key error:', error);
       res.status(500).json({ message: 'Failed to fetch API key', error: error.message });
